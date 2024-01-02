@@ -21,15 +21,15 @@ spreadsheets_id = "1rKlBcD49c0YCyWr_JHsK56XgVMJAlG8zFDOlWocOH_o"
 
 def extract_data():
     credentials = None
-    if os.path.exists("token.json"):
-        credentials = Credentials.from_authorized_user_file("token.json", scopes)
+    if os.path.exists("Private/token.json"):
+        credentials = Credentials.from_authorized_user_file("Private/token.json", scopes)
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", scopes)
+            flow = InstalledAppFlow.from_client_secrets_file("Private/credentials.json", scopes)
             credentials = flow.run_local_server(port=0)
-        with open("token.json", "w") as token:
+        with open("Private/token.json", "w") as token:
             token.write(credentials.to_json())
     
     try:
