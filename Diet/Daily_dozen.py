@@ -13,13 +13,21 @@ from googleapiclient.errors import HttpError
 
 import pandas as pd
 
+from gensim.models import Word2Vec
+from gensim.models import KeyedVectors
 
-scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+from fuzzywuzzy import fuzz
 
-spreadsheets_id = "1rKlBcD49c0YCyWr_JHsK56XgVMJAlG8zFDOlWocOH_o"
+import spacy
+
+# import en_core_web_sm
 
 
-def extract_data():
+word2vec_model_path = "Private/GoogleNews-vectors-negative300.bin.gz"
+word_vectors = KeyedVectors.load_word2vec_format(word2vec_model_path, binary=True)
+
+
+def extract_data_from(scopes, spreadsheets_id, sheet):
     credentials = None
     if os.path.exists("Private/token.json"):
         credentials = Credentials.from_authorized_user_file("Private/token.json", scopes)
@@ -37,7 +45,7 @@ def extract_data():
 
         sheets = service.spreadsheets()
 
-        result = sheets.values().get(spreadsheetId=spreadsheets_id, range="Breakfast").execute()
+        result = sheets.values().get(spreadsheetId=spreadsheets_id, range=sheet).execute()
 
         values = result.get("values", [])
 
@@ -48,7 +56,7 @@ def extract_data():
         print(error)
     
 
-def convert_to_df(extracted_data):
+def split_in_groups(extracted_data):
 
     df = pd.DataFrame(extracted_data[1:], columns=extracted_data[0]) 
     void_row_indices = df[df.isnull().all(axis=1)].index
@@ -83,18 +91,102 @@ def convert_to_df(extracted_data):
 
         groups[group_name] = last_group
 
-    # Now, 'groups' is a list of DataFrames, where each DataFrame represents a group of rows separated by void rows
-    for i, group_df in enumerate(groups):
-        print(f"Group {i + 1}:\n{group_df}\n{'-' * 20}")
+    return groups
 
 
+def find_components_in_database(components_df, food_df):
+
+    for _, row in components_df.iterrows():
+
+        if row["Name"] is None:
+            break
+        if "//" in row["Name"]:
+
+            component_name = row["Name"].split(" //")[0]
+        else:
+            component_name = row["Name"]
+
+        component_name = component_name.split(" ")[0]
+
+
+        # for 
+        # Your database of food names
+        food_database = ["Apple", "Banana", "Orange", "Strawberry", "Pineapple"]
+
+        # Given product name
+        given_product = "Bananna"
+
+        # Find the most similar word in the database
+        similarities = find_most_similar_word_W2V(component_name.lower(), food_df)
+        # similarities = find_similar_word_FUZZ(component_name, food_df)
+        # similarities = find_most_similar_word(given_product, food_database)
+
+        # Set a threshold for similarity
+        threshold = 0.7
+        best_match, best_similarity = similarities[0]
+
+        # if best_similarity >= threshold:
+        print(f"The given product '{component_name}' is likely '{best_match}' with a similarity score of {best_similarity:.2f}.")
+        # else:
+        #     print(f"No match found for '{component_name}'.")
+
+
+
+def find_most_similar_word_W2V(query, possible_words):
+    
+    similarities = []
+
+    for word in possible_words:
+
+        if word is None:
+            continue
+
+        if len(word.split(" ")) > 1:
+            words = word.split(" ")
+            try:
+                words_similarities = [word_vectors.similarity(query, word.lower()) for word in words]
+                words_similarities = sum(words_similarities) / len(words_similarities)
+
+                similarities.append((word, words_similarities))
+            except Exception as e:
+                print(e)
+        else:
+            try:
+                similarities.append((word, word_vectors.similarity(query, word.lower())))
+            except Exception as e:
+                print(e)
+    
+    if len(similarities) is None:
+        similarities = [('', 0)]
+        
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    
+    return similarities
+
+def find_similar_word_FUZZ(query, possible_words):
+
+    # Calculate similarity using fuzz ratio
+    similarities = [(word, fuzz.ratio(query, word)) for word in possible_words]
+
+    similarities.sort(key=lambda x: x[1], reverse=True)
 
 if __name__ == "__main__":
 
-    googlesheet_values = extract_data()
-    convert_to_df(googlesheet_values)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
 
-    
+    spreadsheets_id = "1rKlBcD49c0YCyWr_JHsK56XgVMJAlG8zFDOlWocOH_o"
+
+    breakfast_values = extract_data_from(scopes, spreadsheets_id, "Breakfast")
+
+    nutrients_values = extract_data_from(scopes, spreadsheets_id, "Nutrients Values")
+
+    # recipes = split_in_groups(breakfast_values)
+
+    breakfast_df = pd.DataFrame(breakfast_values[1:], columns=breakfast_values[0])
+
+    nutrients_df = pd.DataFrame(nutrients_values[1:], columns=nutrients_values[0])
+
+    find_components_in_database(breakfast_df, nutrients_df["ITEM"])
 
 
 """ import pandas as pd
