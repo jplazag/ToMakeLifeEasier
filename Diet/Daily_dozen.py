@@ -20,6 +20,8 @@ from fuzzywuzzy import fuzz
 
 import spacy
 
+import numpy as np
+
 # import en_core_web_sm
 
 
@@ -99,62 +101,86 @@ def find_components_in_database(components_df, food_df):
     for _, row in components_df.iterrows():
 
         if row["Name"] is None:
-            break
+            continue
         if "//" in row["Name"]:
 
             component_name = row["Name"].split(" //")[0]
         else:
             component_name = row["Name"]
 
-        component_name = component_name.split(" ")[0]
-
-
-        # for 
-        # Your database of food names
-        food_database = ["Apple", "Banana", "Orange", "Strawberry", "Pineapple"]
-
-        # Given product name
-        given_product = "Bananna"
+        
+        print(component_name)
+        print(type(component_name))
 
         # Find the most similar word in the database
-        similarities = find_most_similar_word_W2V(component_name.lower(), food_df)
+        similarities = find_most_similar_word_W2V(component_name, food_df)
         # similarities = find_similar_word_FUZZ(component_name, food_df)
         # similarities = find_most_similar_word(given_product, food_database)
 
         # Set a threshold for similarity
         threshold = 0.7
-        best_match, best_similarity = similarities[0]
+        # best_match, best_similarity = similarities[0]
 
         # if best_similarity >= threshold:
-        print(f"The given product '{component_name}' is likely '{best_match}' with a similarity score of {best_similarity:.2f}.")
+        # print(f"The given product '{component_name}' is likely '{best_match}' with a similarity score of {best_similarity:.2f}.")
         # else:
         #     print(f"No match found for '{component_name}'.")
 
+        print(f"The given product {component_name} is likely {similarities[0:4]}")
 
 
-def find_most_similar_word_W2V(query, possible_words):
+def find_most_similar_word_W2V(queries, possible_words):
     
     similarities = []
 
-    for word in possible_words:
+    queries = queries.replace(".", " ").replace(",", " ")
+    queries = queries.split(" ")
+    
+    for words in possible_words:
 
-        if word is None:
+        if words is None:
             continue
 
-        if len(word.split(" ")) > 1:
-            words = word.split(" ")
-            try:
-                words_similarities = [word_vectors.similarity(query, word.lower()) for word in words]
-                words_similarities = sum(words_similarities) / len(words_similarities)
+        words = words.replace(".", " ").replace(",", " ")
+        words = words.split(" ")
+        
+        words_similarities = np.zeros((len(queries), len(words)))
 
-                similarities.append((word, words_similarities))
-            except Exception as e:
-                print(e)
-        else:
-            try:
-                similarities.append((word, word_vectors.similarity(query, word.lower())))
-            except Exception as e:
-                print(e)
+        for i, query in enumerate(queries):
+
+            if query.isnumeric():
+                continue
+
+            # if len(words.split(" ")) > 1:
+            
+        
+            # words_similarities = [word_vectors.similarity(query, word.lower()) for word in words]
+            # words_similarities = sum(words_similarities) / len(words_similarities)
+            
+            
+            for j, word in enumerate(words):
+            
+                try:
+                    words_similarities[i, j] = word_vectors.similarity(query.lower(), word.lower())
+                except Exception as e:
+                    # print(e)
+                    pass
+                
+        if np.sum(words_similarities) / ( np.count_nonzero(words_similarities > 0)) > 0.5:
+            print("=================================")
+            print(queries)
+            print(words)
+            print("_________________________________")
+            print(words_similarities)
+            similarities.append((words, np.sum(words_similarities) / ( np.count_nonzero(words_similarities > 0)) ) )
+
+                
+            # else:
+            #     try:
+            #         similarities.append((words, word_vectors.similarity(query.lower(), words.lower())))
+            #     except Exception as e:
+            #         # print(e)
+            #         pass
     
     if len(similarities) is None:
         similarities = [('', 0)]
@@ -169,6 +195,8 @@ def find_similar_word_FUZZ(query, possible_words):
     similarities = [(word, fuzz.ratio(query, word)) for word in possible_words]
 
     similarities.sort(key=lambda x: x[1], reverse=True)
+
+    return similarities
 
 if __name__ == "__main__":
 
